@@ -1,5 +1,5 @@
 # untitled_PLS
 
-Parallelized multi-way PCA/PLS library for on-line batch process monitoring.
+Parallelized latent structures library for on-line batch process monitoring. Intended for use with multi-way/multi-batch data.
 
 !!Under construction!!
