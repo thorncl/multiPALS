@@ -11,7 +11,7 @@ def main():
 
     cluster = LocalCluster()
     client = Client(cluster)
-    pca = MBPCA(client, 1, 0.001, 5)
+    pca = MBPCA(client, 5, 0.001, 10)
     raw_data = read_data(client, config.BRIDGE_DATA_PATH, "h5", "data")
     X = preprocess_data(client, raw_data)
     pca.fit(X)

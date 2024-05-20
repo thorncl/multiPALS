@@ -1,1 +1,1 @@
-BRIDGE_DATA_PATH = "../Bridge_Data/scaled_201811_*.h5"
+BRIDGE_DATA_PATH = "../Bridge_Data/scaled_201901_*.h5"

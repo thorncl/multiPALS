@@ -2,6 +2,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 import numpy as np
+import copy
 from dask_ml.preprocessing import StandardScaler
 from dask.distributed import Client, as_completed
 from utils import *
@@ -22,14 +23,17 @@ class MBPCA:
         self.tol: float = tol
         self.iter: int = iter
         self.solver = solver
-        self.X: list
-        self.E: list
+        self.X: list = []
+        self.X_orig: list = []
+        self.E: list = []
         self.t_T: da
-        self.p_b: list
+        self.p_b: list = []
         self.t_b: da
         self.w_T: da
         self.t_T_new: da
-        self.t_T_block: list
+        self.t_T_block: list = []
+        self.variance: list = []
+        self.curr_component: int = 0
 
     def set_initial_super_score(self):
 
@@ -42,7 +46,7 @@ class MBPCA:
 
     def block_loadings(self):
 
-        self.p_b = self.client.map(get_p_b, self.X, self.t_T_block, pure = False)
+        self.p_b = self.client.map(get_p_b, self.X, self.t_T_block)
         
     def block_scores(self):
 
@@ -53,7 +57,7 @@ class MBPCA:
 
     def super_weights(self):
 
-        self.w_T = self.client.submit(get_w_T, self.t_b, self.t_T, pure = False)
+        self.w_T = self.client.submit(get_w_T, self.t_b, self.t_T)
 
     def super_score(self):
 
@@ -67,36 +71,39 @@ class MBPCA:
         self.max_eps = np.max(self.eps)
 
         self.t_T = self.t_T_new
-        del self.t_T_new
+        #del self.t_T_new
         self.set_super_score_block()
 
     def deflate(self):
 
-        self.E = self.client.map(get_residuals, self.X, self.t_T_block, self.p_b, pure = False)
+        self.block_loadings()
+
+        self.E = self.client.map(get_residuals, self.X, self.t_T_block, self.p_b)
         self.E = self.client.gather(self.E)
         self.E = self.client.persist(self.E)
 
         self.variance_explained()
 
         self.X = self.E
-        del self.E
+        #del self.E
 
         self.has_converged = False
 
     def variance_explained(self):
 
-        tr_X = self.client.map(eig_sum, self.X)
+        tr_X = self.client.map(eig_sum, self.X_orig)
         tr_E = self.client.map(eig_sum, self.E)
 
-        self.var_exp = self.client.map(get_var_exp, tr_X, tr_E)
-        self.var_exp = self.client.gather(self.var_exp)
-        self.var_exp = self.client.persist(self.var_exp)
+        var_exp = self.client.map(get_var_exp, tr_X, tr_E)
+        var_exp = self.client.gather(var_exp)
+        self.variance.append(self.client.persist(var_exp))
 
         return
     
     def fit(self, X):
 
         self.X = X
+        self.X_orig = copy.deepcopy(X)
         self._fit()
 
         return self
@@ -108,9 +115,10 @@ class MBPCA:
 
     def _fit_nipals(self):
 
-        self.set_initial_super_score()
-
         for i in range(self.n_components):
+
+            self.set_initial_super_score()
+
             for j in range(self.iter):
                 self.block_loadings()
                 self.block_scores()
@@ -123,3 +131,4 @@ class MBPCA:
                     break 
             
             self.deflate()
+            self.curr_component += 1

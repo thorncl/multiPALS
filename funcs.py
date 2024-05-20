@@ -16,7 +16,7 @@ def get_p_b(X_b: da, t_T: da):
 
 def get_t_b(X_b: da, p_b: da):
 
-    return (X_b @ p_b) / X_b.shape[1]
+    return (X_b @ p_b) / da.sqrt(X_b.shape[1])
 
 def get_w_T(t_b: da, t_T: da):
 
@@ -29,7 +29,7 @@ def get_t_T_new(t_b: da, w_T: da):
 
 def get_residuals(X_b: da, t_T: da, p_b: da):
 
-    return (X_b - t_T @ p_b.T)
+    return (X_b - (t_T @ p_b.T))
 
 def eig_sum(X_b: da):
     
