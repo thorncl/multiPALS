@@ -3,16 +3,23 @@ import dask.array as da
 def get_autoscaled_data(partition: da):
 
     partition_mean = da.mean(partition, axis = 0)
-    partition_std = da.std(partition, axis = 0)
+    partition_std = da.sqrt(da.var(partition, axis = 0, ddof = 1))
     partition_std[partition_std == 0] = 1
-    partition_block_scaler = da.sqrt(partition.shape[1])
 
-    return ((partition - partition_mean)/partition_std)/partition_block_scaler
+    return ((partition - partition_mean)/partition_std)
 
-def get_p_b(X_b: da, t_T: da):
+def get_col_var(X_b: da):
 
+    return da.max(da.nanvar(X_b, axis = 0, ddof = 1))
+
+def get_p_b(X_b: da, t_T: da, norm: bool):
+    
     p_b = (X_b.T @ t_T) / (t_T.T @ t_T)
-    return p_b / da.linalg.norm(p_b)
+
+    if norm:
+        p_b = p_b / da.linalg.norm(p_b)
+
+    return p_b
 
 def get_t_b(X_b: da, p_b: da):
 

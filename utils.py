@@ -54,6 +54,7 @@ def read_data(client: Client, data_loc: str, file_type: str, key: str = None, n_
             )
     
     X_persisted = client.persist(X)
+    X_persisted = X_persisted.T
 
     X = X_persisted.partitions.ravel()
     X = client.persist(X)
@@ -75,7 +76,7 @@ def progress_bar(curr_iter: int, max_iter: int, curr_component: int, n_component
     complete_chars = "#"*(curr_iter+1)*(length//max_iter)
     incomplete_chars = "-"*(length - (curr_iter+1)*(length//max_iter))
     
-    progress_str = f"Fitting component {curr_component + 1}/{n_components} [" + complete_chars + incomplete_chars + f" {curr_iter+1}/{max_iter}] Eps: " + f"{max_eps :.3f}."
+    progress_str = f"Fitting component {curr_component + 1}/{n_components} [" + complete_chars + incomplete_chars + f" {curr_iter+1}/{max_iter}] Eps: " + f"{max_eps}."
 
     return progress_str
     

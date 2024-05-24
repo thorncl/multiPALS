@@ -6,16 +6,14 @@ from utils import *
 import config
 from dask.distributed import Client, LocalCluster
 
-
 def main():
 
     cluster = LocalCluster()
     client = Client(cluster)
-    pca = MBPCA(client, 5, 0.001, 10)
-    raw_data = read_data(client, config.BRIDGE_DATA_PATH, "h5", "data")
+    pca = MBPCA(client, 2, 1e-18, 100)
+    raw_data = read_data(client, config.RANDOM_DATA_PATH, "h5", key = "data")
     X = preprocess_data(client, raw_data)
     pca.fit(X)
-
 
     print('end')
 

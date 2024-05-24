@@ -7,6 +7,10 @@ from dask_ml.preprocessing import StandardScaler
 from dask.distributed import Client, as_completed
 from utils import *
 
+#TODO:
+
+# Add support for missing values via NIPALS algorithm. Modify autoscaling method to skip nan values in mean/std computation.
+
 class MBPCA:
 
     def __init__(
@@ -37,17 +41,23 @@ class MBPCA:
 
     def set_initial_super_score(self):
 
-        self.t_T = self.X[0][:,0].reshape(-1,1)
-        self.set_super_score_block()
+        X_array = da.asarray(self.X)
+        col_var = da.nanvar(X_array, axis = 1, ddof = 1)
+        block_idx, col_idx = da.unravel_index(da.argmax(col_var, axis = None), col_var.shape)
+
+        self.t_T = self.X[block_idx][:, col_idx].reshape(-1,1)
+
+        del X_array, col_var, block_idx, col_idx 
 
     def set_super_score_block(self):
 
         self.t_T_block = self.client.persist([self.t_T for i in range(len(self.X))])
 
-    def block_loadings(self):
-
-        self.p_b = self.client.map(get_p_b, self.X, self.t_T_block)
+    def block_loadings(self, norm: bool = True):
         
+        self.p_b = self.client.map(get_p_b, self.X, self.t_T_block, [norm for i in range(len(self.X))])
+        self.p_b = self.client.gather(self.p_b)
+
     def block_scores(self):
 
         self.t_b = self.client.map(get_t_b, self.X, self.p_b)
@@ -58,36 +68,28 @@ class MBPCA:
     def super_weights(self):
 
         self.w_T = self.client.submit(get_w_T, self.t_b, self.t_T)
+        self.w_T = self.w_T.result()
 
     def super_score(self):
 
         self.t_T_new = self.client.submit(get_t_T_new, self.t_b, self.w_T)
         self.t_T_new = self.client.persist(self.t_T_new.result())
 
-    def check_convergence(self):
+    def get_eps(self):
 
-        self.eps = (abs(self.t_T_new - self.t_T)).compute()
-        self.has_converged = (self.eps <= self.tol).all()
-        self.max_eps = np.max(self.eps)
+        eps = self.t_T_new - self.t_T
 
-        self.t_T = self.t_T_new
-        #del self.t_T_new
-        self.set_super_score_block()
+        self.eps = ((eps.T @ eps) / (self.t_T.shape[0] * (self.t_T_new.T @ self.t_T_new))).compute().item()
+
+    def has_converged(self):
+
+        return self.eps < self.tol
 
     def deflate(self):
-
-        self.block_loadings()
 
         self.E = self.client.map(get_residuals, self.X, self.t_T_block, self.p_b)
         self.E = self.client.gather(self.E)
         self.E = self.client.persist(self.E)
-
-        self.variance_explained()
-
-        self.X = self.E
-        #del self.E
-
-        self.has_converged = False
 
     def variance_explained(self):
 
@@ -97,8 +99,6 @@ class MBPCA:
         var_exp = self.client.map(get_var_exp, tr_X, tr_E)
         var_exp = self.client.gather(var_exp)
         self.variance.append(self.client.persist(var_exp))
-
-        return
     
     def fit(self, X):
 
@@ -118,17 +118,24 @@ class MBPCA:
         for i in range(self.n_components):
 
             self.set_initial_super_score()
+            self.set_super_score_block()
 
             for j in range(self.iter):
-                self.block_loadings()
+                self.block_loadings(norm = True)
                 self.block_scores()
                 self.super_weights()
                 self.super_score()
-                self.check_convergence()
-                print(progress_bar(j, self.iter, i, self.n_components, self.max_eps), end = '\r', flush = True)
+                self.get_eps()
+                self.t_T = self.t_T_new
+                self.set_super_score_block()
 
-                if self.has_converged:
+                print(progress_bar(j, self.iter, i, self.n_components, self.eps), end = '\r', flush = True)
+
+                if self.has_converged():
                     break 
-            
+
+            self.block_loadings(norm = False)
             self.deflate()
+            self.variance_explained()
+            self.X = self.E
             self.curr_component += 1
