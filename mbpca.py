@@ -78,7 +78,7 @@ class MBPCA:
     def get_eps(self):
 
         eps = self.t_T_new - self.t_T
-
+        
         self.eps = ((eps.T @ eps) / (self.t_T.shape[0] * (self.t_T_new.T @ self.t_T_new))).compute().item()
 
     def has_converged(self):
