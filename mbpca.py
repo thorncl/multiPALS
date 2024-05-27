@@ -9,7 +9,15 @@ from utils import *
 
 #TODO:
 
-# Add support for missing values via NIPALS algorithm. Modify autoscaling method to skip nan values in mean/std computation.
+# Look into computation time for var explained and super score convergence -> currently requires large amount of memory.
+# Look into refactoring code to support async operations; otherwise, maybe no need for the separate mapping functions.
+
+# Transform method
+# Predict method
+# SPE
+# PRESS
+# Total variance???
+# Hotelling's T2
 
 class MBPCA:
 
@@ -93,17 +101,15 @@ class MBPCA:
 
     def variance_explained(self):
 
-        tr_X = self.client.map(eig_sum, self.X_orig)
         tr_E = self.client.map(eig_sum, self.E)
 
-        var_exp = self.client.map(get_var_exp, tr_X, tr_E)
+        var_exp = self.client.map(get_var_exp, self.tr_X, tr_E)
         var_exp = self.client.gather(var_exp)
         self.variance.append(self.client.persist(var_exp))
     
     def fit(self, X):
 
         self.X = X
-        self.X_orig = copy.deepcopy(X)
         self._fit()
 
         return self
@@ -111,6 +117,7 @@ class MBPCA:
     def _fit(self):
 
         if self.solver == "nipals":
+            self.tr_X = self.client.map(eig_sum, self.X)
             self._fit_nipals()
 
     def _fit_nipals(self):

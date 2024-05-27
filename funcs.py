@@ -1,16 +1,14 @@
 import dask.array as da
+import numpy as np
 
 def get_autoscaled_data(partition: da):
 
-    partition_mean = da.mean(partition, axis = 0)
-    partition_std = da.sqrt(da.var(partition, axis = 0, ddof = 1))
-    partition_std[partition_std == 0] = 1
+    partition = da.where(~da.isfinite(partition), np.nan, partition)
+
+    partition_mean = da.nanmean(partition, axis = 0)
+    partition_std = da.sqrt(da.nanvar(partition, axis = 0, ddof = 1))
 
     return ((partition - partition_mean)/partition_std)
-
-def get_col_var(X_b: da):
-
-    return da.max(da.nanvar(X_b, axis = 0, ddof = 1))
 
 def get_p_b(X_b: da, t_T: da, norm: bool):
     
