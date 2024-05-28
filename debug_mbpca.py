@@ -13,7 +13,8 @@ def main():
     pca = MBPCA(client, 2, 1e-18, 100)
     raw_data = read_data(client, config.RANDOM_DATA_PATH, "h5", key = "data")
     X = preprocess_data(client, raw_data)
-    pca.fit(X)
+    model = pca.fit(X)
+    X_transformed = pca.transform(X)
 
     print('end')
 

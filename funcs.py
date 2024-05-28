@@ -15,7 +15,7 @@ def get_p_b(X_b: da, t_T: da, norm: bool):
     p_b = (X_b.T @ t_T) / (t_T.T @ t_T)
 
     if norm:
-        p_b = p_b / da.linalg.norm(p_b)
+       p_b /= da.linalg.norm(p_b)
 
     return p_b
 
