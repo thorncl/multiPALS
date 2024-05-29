@@ -15,6 +15,7 @@ def main():
     X = preprocess_data(client, raw_data)
     model = pca.fit(X)
     X_transformed = pca.transform(X)
+    X_hat = pca.predict()
 
     print('end')
 

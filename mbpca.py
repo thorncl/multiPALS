@@ -19,7 +19,6 @@ from utils import *
 # Total variance???
 # Hotelling's T2
 
-
 def _infer_dimensions(X):
 
     n_samples = X[0].shape[0]
@@ -59,20 +58,20 @@ class MBPCA:
     def _init_model(self):
 
         self.residuals = da.empty((self._n_partitions, self._n_samples, self._n_features, self.n_components))
-        self.super_scores = da.empty((self._n_samples, 1, self.n_components))
+        self.super_scores = da.empty((self._n_samples, self.n_components))
         self.block_loadings = da.empty((self._n_partitions, self._n_features, self.n_components))
         self.block_scores = da.empty((self._n_samples, self._n_features, self.n_components))
-        self.super_weights = da.empty((self._n_features, 1, self.n_components))
-        self.block_var_exp = da.empty((self._n_features, 1, self.n_components))
+        self.super_weights = da.empty((self._n_features, self.n_components))
+        self.block_var_exp = da.empty((self._n_features, self.n_components))
 
     def _update_model(self, E: list, t_T: da, p_b: list, t_b: da, w_T: da, var_exp: list):
 
         self.residuals[:, :, :, self.curr_component] = da.asarray(E)
-        self.super_scores[:, :, self.curr_component] = t_T
+        self.super_scores[:, self.curr_component] = t_T.flatten()
         self.block_loadings[:, :, self.curr_component] = da.asarray(p_b).squeeze()
         self.block_scores[:, :, self.curr_component] = t_b
-        self.super_weights[:, :, self.curr_component] = w_T
-        self.block_var_exp[:, :, self.curr_component] = da.asarray(var_exp).reshape(-1, 1)
+        self.super_weights[:, self.curr_component] = w_T.flatten()
+        self.block_var_exp[:, self.curr_component] = da.asarray(var_exp)
 
     def set_initial_super_score(self):
 
@@ -189,4 +188,12 @@ class MBPCA:
 
         return X @ self.block_loadings
 
+    def predict(self):
+
+        return (self.block_loadings @ self.super_scores.T)
+    
+    def spe(self):
+    
+        return
+    
 
