@@ -221,8 +221,5 @@ class MBPCA:
 
         return p_b, t_b, t_T, X_hat, E
 
-    def squared_prediction_error(self, X, X_hat):
-    
-        return
     
 
