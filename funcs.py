@@ -1,15 +1,6 @@
 import dask.array as da
 import numpy as np
 
-def get_autoscaled_data(partition: da):
-
-    partition = da.where(~da.isfinite(partition), np.nan, partition)
-
-    partition_mean = da.nanmean(partition, axis = 0)
-    partition_std = da.sqrt(da.nanvar(partition, axis = 0, ddof = 1))
-
-    return ((partition - partition_mean)/partition_std)
-
 def get_p_b(X_b: da, t_T: da, norm: bool):
     
     p_b = (X_b.T @ t_T) / (t_T.T @ t_T)

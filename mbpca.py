@@ -9,11 +9,6 @@ from utils import *
 
 #TODO:
 
-# Look into computation time for var explained and super score convergence -> currently requires large amount of memory.
-# Look into refactoring code to support async operations; otherwise, maybe no need for the separate mapping functions.
-
-# Transform method
-# Predict method
 # SPE
 # PRESS
 # Total variance???
@@ -47,6 +42,8 @@ class MBPCA:
         self._n_features: int
         self._n_partitions: int
         self.X: list = []
+        self.mean: da
+        self.std: da
         self.residuals: da 
         self.super_scores: da 
         self.block_loadings: da
@@ -55,14 +52,30 @@ class MBPCA:
         self.block_var_exp: da
         self.curr_component: int = 0
 
+    def preprocess_data(self, X: list, mean: da = None, std: da = None):
+
+        X_masked = da.where(~da.isfinite(X), np.nan, X)
+
+        if all(arg is None for arg in [mean, std]):
+            mean = da.nanmean(X_masked, axis = 1)
+            std = da.sqrt(da.nanvar(X, axis = 1, ddof = 1))
+        
+        for i in range(X_masked.shape[0]):
+            X_masked[i, :, :] = (X_masked[i, :, :] - mean[i, :])/std[i, :]
+
+        X = X_masked.reshape(X_masked.shape[0]*X_masked.shape[1], X_masked.shape[2])
+        X = X.partitions.ravel()
+
+        return self.client.persist(X), mean, std
+
     def _init_model(self):
 
         self.residuals = da.empty((self._n_partitions, self._n_samples, self._n_features, self.n_components))
         self.super_scores = da.empty((self._n_samples, self.n_components))
         self.block_loadings = da.empty((self._n_partitions, self._n_features, self.n_components))
-        self.block_scores = da.empty((self._n_samples, self._n_features, self.n_components))
-        self.super_weights = da.empty((self._n_features, self.n_components))
-        self.block_var_exp = da.empty((self._n_features, self.n_components))
+        self.block_scores = da.empty((self._n_samples, self._n_partitions, self.n_components))
+        self.super_weights = da.empty((self._n_partitions, self.n_components))
+        self.block_var_exp = da.empty((self._n_partitions, self.n_components))
 
     def _update_model(self, E: list, t_T: da, p_b: list, t_b: da, w_T: da, var_exp: list):
 
@@ -131,17 +144,19 @@ class MBPCA:
         var_exp = self.client.gather(var_exp)
         return self.client.persist(var_exp)
     
-    def fit(self, X):
+    def fit(self, X: list):
 
         self.X = X
         self._n_samples, self._n_features, self._n_partitions = _infer_dimensions(self.X)
         self._init_model()
 
-        self._fit()
+        self._fit(X)
 
         return self
 
-    def _fit(self):
+    def _fit(self, X: list):
+
+        self.X, self.mean, self.std = self.preprocess_data(X)
 
         if self.solver == "nipals":
             self.tr_X = self.client.map(eig_sum, self.X)
@@ -178,21 +193,35 @@ class MBPCA:
             self.X = E
             self.curr_component += 1 
 
-    def transform(self, X):
+    def predict(self, X_new: list):
 
-        X = da.asarray(X)
+        p_b = da.empty((self._n_partitions, self._n_features, self.n_components))
+        t_T = da.empty((self._n_samples, self.n_components))
+        X_hat = da.empty((self._n_partitions, self._n_samples, self._n_features))
+        E = da.empty((self._n_partitions, self._n_samples, self._n_features))
 
-        return self._transform(X)
-    
-    def _transform(self, X):
+        X_new_scaled, _, _ = self.preprocess_data(X_new, mean = self.mean, std = self.std)
+        X_new_scaled = da.asarray(X_new_scaled)
 
-        return X @ self.block_loadings
+        for i in range(self.n_components):
 
-    def predict(self):
+            p_b_i = da.asarray([self.block_loadings[j, :, i]/da.linalg.norm(self.block_loadings[j, :, i]) for j in range(self._n_partitions)])
+            p_b[:, :, i] = p_b_i
+     
+        t_b = da.transpose(X_new_scaled @ p_b, axes = (1, 0, 2)) / da.sqrt(self._n_features)
 
-        return (self.block_loadings @ self.super_scores.T)
-    
-    def spe(self):
+        for i in range(self.n_components):
+
+            t_T[:, i] = t_b[:, :, i] @ self.super_weights[:,i]
+
+        for k in range(self._n_partitions):
+            
+            X_hat[k, :, :] = t_T @ p_b[k, :, :].T
+            E[k, :, :] = X_new_scaled[k, :, :] - X_hat[k, :, :]
+
+        return p_b, t_b, t_T, X_hat, E
+
+    def squared_prediction_error(self, X, X_hat):
     
         return
     

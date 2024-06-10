@@ -4,11 +4,9 @@ import numpy as np
 from dask.distributed import Client
 from funcs import *
 
-
 _parameter_constraints: dict = {
     "file_type": ["csv", "pqt", "h5"]
 } 
-
 
 def read_data(client: Client, data_loc: str, file_type: str, key: str = None, n_blocks: int = None) -> None:
 
@@ -53,21 +51,13 @@ def read_data(client: Client, data_loc: str, file_type: str, key: str = None, n_
             For instance, the data is of shape {X.shape} and partitions of shape {X.chunksize}."""
             )
     
-    X_persisted = client.persist(X)
-    X_persisted = X_persisted.T
-
-    X = X_persisted.partitions.ravel()
+    X = da.stack((X.T).partitions.ravel())
     X = client.persist(X)
-
+    
     return X
 
-def preprocess_data(client: Client, data_partitions: list):
-
-    X = client.map(get_autoscaled_data, data_partitions)
-    X = client.gather(X)
-    X_persisted = client.persist(X)
-    
-    return X_persisted
+# this needs to be moved back to MBPCA class as part of the fit flow
+# needs to return mean and std to be used for new objects
 
 def progress_bar(curr_iter: int, max_iter: int, curr_component: int, n_components: int, max_eps: np.float64):
 
